@@ -1,0 +1,17 @@
+# Optional pretty URLs. The app also works without mod_rewrite via index.php?route=...
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /money/
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php?route=$1 [QSA,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Deny direct access to data and app internals.
+<FilesMatch "\.(sqlite|sql|log)$">
+    Require all denied
+</FilesMatch>
