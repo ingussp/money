@@ -1,0 +1,15 @@
+# SQLite runtime sidecar files
+data/*.sqlite-wal
+data/*.sqlite-shm
+data/*.sqlite-journal
+data/*.db-journal
+# Other / backup database files (data/money.sqlite is committed with seed data)
+data/*.db
+data/*.db3
+data/*.sqlite3
+data/*.bak
+# Runtime uploads
+uploads/*
+# OS / editor
+Thumbs.db
+.DS_Store
