@@ -1,0 +1,1 @@
+<?php if(isset($_SESSION['flash'])): $notice=$_SESSION['flash']; unset($_SESSION['flash']); ?><div class="notice <?= e($notice['type']) ?>" role="status"><?= icon('circle-check') ?><span><?= e($notice['message']) ?></span><button class="icon-button" data-dismiss aria-label="Dismiss notification" title="Dismiss"><?= icon('x') ?></button></div><?php endif ?>

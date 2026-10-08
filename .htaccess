@@ -1,17 +1,9 @@
-# Optional pretty URLs. The app also works without mod_rewrite via index.php?route=...
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteBase /money/
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^(.*)$ index.php?route=$1 [QSA,L]
-</IfModule>
-
+Options -Indexes
+DirectoryIndex index.php
+RewriteEngine On
+RewriteRule ^(app|database|storage|tools|tests)(/|$) - [F,L,NC]
+RewriteRule ^(config(?:\.local|\.example)?\.php|router\.php|create-pr\.cmd|README\.md|.*\.(sql|log|json|ps1|mjs))$ - [F,L,NC]
 <IfModule mod_headers.c>
-    Header set X-Content-Type-Options "nosniff"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "same-origin"
 </IfModule>
-
-# Deny direct access to data and app internals.
-<FilesMatch "\.(sqlite|sql|log)$">
-    Require all denied
-</FilesMatch>

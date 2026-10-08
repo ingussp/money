@@ -1,0 +1,15 @@
+{
+  "name": "money",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Development tools for the PHP and MySQL Money workspace",
+  "scripts": {
+    "lint:php": "node tools/lint.mjs",
+    "test": "node tests/verify.mjs",
+    "preview": "node tools/start-preview.mjs",
+    "render:assets": "node tools/render-assets.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.57.0"
+  }
+}

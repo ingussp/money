@@ -1,248 +1,88 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Helper functions shared across the application.
- */
+final class ValidationException extends RuntimeException {}
 
-function base_path(string $path = ''): string
-{
-    return rtrim(BASE_PATH, '/\\') . ($path !== '' ? DIRECTORY_SEPARATOR . ltrim($path, '/\\') : '');
+function config(string $key): mixed { return $GLOBALS['config'][$key] ?? null; }
+function e(mixed $value): string { return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
+function base_path(): string { return rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/.'); }
+function url(string $route = 'home', array $params = []): string { return base_path() . '/index.php?' . http_build_query(['r' => $route] + $params); }
+function asset(string $path): string { return base_path() . '/assets/' . $path; }
+function redirect(string $route, array $params = []): never { header('Location: ' . url($route, $params), true, 303); exit; }
+function is_post(): bool { return ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'; }
+function post_only(): void { if (!is_post()) abort_request(405, 'Method not allowed'); }
+function csrf(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }
+function csrf_field(): string { return '<input type="hidden" name="_token" value="' . e(csrf()) . '">'; }
+function verify_csrf(): void {
+    if (!is_string($_POST['_token'] ?? null) || !hash_equals(csrf(), $_POST['_token'])) abort_request(419, 'Your session expired. Refresh the page and try again.');
 }
-
-/** Build an internal URL using query-string routing (works without mod_rewrite). */
-function url(string $route = '', array $params = []): string
-{
-    $qs = ['route' => $route];
-    if ($params) {
-        $qs = array_merge($qs, $params);
-    }
-    return 'index.php?' . http_build_query($qs);
+function flash(string $message, string $type = 'success'): void { $_SESSION['flash'] = ['message' => $message, 'type' => $type]; }
+function render(string $view, array $data = [], string $layout = 'app'): void {
+    extract($data, EXTR_SKIP);
+    ob_start();
+    require ROOT . '/app/views/' . $view . '.php';
+    $content = ob_get_clean();
+    require ROOT . '/app/views/layouts/' . $layout . '.php';
 }
-
-function redirect(string $route = '', array $params = []): void
-{
-    header('Location: ' . url($route, $params));
+function abort_request(int $status, string $message): never {
+    http_response_code($status);
+    echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' . $status . ' | Money</title><link rel="stylesheet" href="' . e(asset('app.css')) . '"><main class="standalone"><a class="brand" href="' . e(url()) . '">money.</a><h1>' . $status . '</h1><p>' . e($message) . '</p><a class="button" href="' . e(url('dashboard')) . '">Back to Money</a></main></html>';
     exit;
 }
-
-/** Escape a string for safe HTML output. */
-function e(?string $value): string
-{
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+function input(string $key, string $default = ''): string {
+    $value = $_POST[$key] ?? $default;
+    if (!is_string($value)) throw new ValidationException('Invalid form value.');
+    return trim($value);
 }
-
-/** Flash messages (one-shot session values). */
-function flash(string $key, ?string $message): void
-{
-    $_SESSION['_flash'][$key] = $message;
-}
-
-function get_flash(string $key): ?string
-{
-    if (isset($_SESSION['_flash'][$key])) {
-        $m = $_SESSION['_flash'][$key];
-        unset($_SESSION['_flash'][$key]);
-        return $m;
-    }
-    return null;
-}
-
-function csrf_token(): string
-{
-    if (empty($_SESSION['_csrf'])) {
-        $_SESSION['_csrf'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['_csrf'];
-}
-
-function csrf_field(): string
-{
-    return '<input type="hidden" name="_csrf" value="' . e(csrf_token()) . '">';
-}
-
-function verify_csrf(): void
-{
-    $token = $_POST['_csrf'] ?? '';
-    if (!hash_equals(csrf_token(), (string)$token)) {
-        http_response_code(419);
-        exit('CSRF token mismatch. Please go back and try again.');
-    }
-}
-
-/** Translate a key using the active locale. */
-function t(string $key, array $replace = []): string
-{
-    global $LANG;
-    $locale = current_locale();
-    $value = $LANG[$locale][$key] ?? ($LANG['en'][$key] ?? $key);
-    foreach ($replace as $k => $v) {
-        $value = str_replace(':' . $k, (string)$v, $value);
-    }
+function required(string $key, int $max = 190): string {
+    $value = input($key);
+    if ($value === '' || mb_strlen($value) > $max) throw new ValidationException(ucfirst(str_replace('_', ' ', $key)) . " is required and must be at most $max characters.");
     return $value;
 }
-
-function current_locale(): string
-{
-    if (isset($_SESSION['locale'])) {
-        return $_SESSION['locale'];
+function date_value(string $value): string {
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+    if (!$date || $date->format('Y-m-d') !== $value || $value < '2000-01-01' || $value > '2100-12-31') throw new ValidationException('Enter a valid date between 2000 and 2100.');
+    return $value;
+}
+function cents(string $value, bool $allowZero = false): int {
+    if (!preg_match('/^\d{1,9}(?:\.\d{1,2})?$/D', $value)) throw new ValidationException('Enter a valid amount with up to two decimal places.');
+    $parts = explode('.', $value);
+    $amount = (int) $parts[0] * 100 + (int) str_pad($parts[1] ?? '', 2, '0');
+    if ((!$allowZero && $amount <= 0) || $amount > 99999999999) throw new ValidationException('The amount must be greater than zero.');
+    return $amount;
+}
+function decimal(int $amount): string { return number_format($amount / 100, 2, '.', ''); }
+function money(int|string|null $amount, ?string $currency = null): string {
+    return ($currency ?? (workspace()['currency'] ?? 'EUR')) . ' ' . number_format((int) $amount / 100, 2, '.', ',');
+}
+function short_date(?string $date): string { return $date ? date('d M Y', strtotime($date)) : '-'; }
+function selected(mixed $a, mixed $b): string { return (string) $a === (string) $b ? ' selected' : ''; }
+function icon(string $name): string { return '<span class="icon" data-icon="' . e($name) . '" aria-hidden="true"></span>'; }
+function badge(string $status): string { return '<span class="badge ' . e($status) . '">' . e(ucfirst($status)) . '</span>'; }
+function audit(string $action, string $description): void {
+    Database::insert('audit_events', ['workspace_id' => workspace_id(), 'user_id' => current_user()['id'], 'action' => $action, 'description' => mb_substr($description, 0, 500)]);
+}
+function scoped(string $table, int $id): array {
+    $row = Database::one("SELECT * FROM $table WHERE id=? AND workspace_id=?", [$id, workspace_id()]);
+    if (!$row) abort_request(404, 'Record not found');
+    return $row;
+}
+function id_param(): int { return filter_var($_GET['id'] ?? $_POST['id'] ?? 0, FILTER_VALIDATE_INT) ?: 0; }
+function month_range(): array {
+    $month = $_GET['month'] ?? date('Y-m');
+    if (!is_string($month) || !preg_match('/^(20\d{2})-(0[1-9]|1[0-2])$/D', $month)) $month = date('Y-m');
+    $start = new DateTimeImmutable($month . '-01');
+    return [$start->format('Y-m-d'), $start->modify('+1 month')->format('Y-m-d'), $month];
+}
+function csv_download(string $filename, array $headers, iterable $rows): never {
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    $out = fopen('php://output', 'wb');
+    fputcsv($out, $headers);
+    foreach ($rows as $row) {
+        $row = array_map(static fn($v) => is_string($v) && preg_match('/^[=+@\-\t\r\n]/', $v) ? "'" . $v : $v, $row);
+        fputcsv($out, $row);
     }
-    return 'en';
-}
-
-function set_locale(string $locale): void
-{
-    $_SESSION['locale'] = $locale;
-}
-
-/** Format money with a currency suffix. */
-function money($amount, string $currency = 'EUR'): string
-{
-    return number_format((float)$amount, 2, '.', ' ') . ' ' . strtoupper($currency);
-}
-
-/** Current authenticated user or null. */
-function current_user(): ?array
-{
-    if (isset($_SESSION['user_id'])) {
-        static $user = null;
-        if ($user === null) {
-            $stmt = db()->prepare('SELECT * FROM users WHERE id = ?');
-            $stmt->execute([$_SESSION['user_id']]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-        }
-        return $user;
-    }
-    return null;
-}
-
-function is_logged_in(): bool
-{
-    return current_user() !== null;
-}
-
-function has_role(string ...$roles): bool
-{
-    $user = current_user();
-    return $user !== null && in_array($user['role'], $roles, true);
-}
-
-function require_login(): void
-{
-    if (!is_logged_in()) {
-        redirect('auth/login');
-    }
-}
-
-function require_role(string ...$roles): void
-{
-    require_login();
-    if (!has_role(...$roles)) {
-        http_response_code(403);
-        exit('Access denied.');
-    }
-}
-
-/** Append an entry to the audit log. */
-function log_action(string $action): void
-{
-    $user = current_user();
-    $stmt = db()->prepare('INSERT INTO audit_log (user_id, action) VALUES (?, ?)');
-    $stmt->execute([$user['id'] ?? null, $action]);
-}
-
-/** Return the PDO instance (created lazily by bootstrap). */
-function db(): PDO
-{
-    global $pdo;
-    return $pdo;
-}
-
-/** Read a setting value. */
-function setting(string $key, $default = null)
-{
-    static $cache = null;
-    if ($cache === null) {
-        $cache = [];
-        foreach (db()->query('SELECT key, value FROM settings') as $row) {
-            $cache[$row['key']] = $row['value'];
-        }
-    }
-    return $cache[$key] ?? $default;
-}
-
-function set_setting(string $key, string $value): void
-{
-    $stmt = db()->prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
-    $stmt->execute([$key, $value]);
-}
-
-/** Read a setting value (alias of setting()). */
-function get_setting(string $key, $default = null)
-{
-    return setting($key, $default);
-}
-
-/** Return the uploads directory path. */
-function uploads_dir(): string
-{
-    return UPLOAD_PATH;
-}
-
-/** Render a Bootstrap badge for a status value. */
-function status_badge(string $status): string
-{
-    $map = [
-        'pending' => 'warning',
-        'approved' => 'success',
-        'rejected' => 'danger',
-        'paid' => 'info',
-        'draft' => 'secondary',
-        'submitted' => 'primary',
-        'sent' => 'primary',
-        'active' => 'success',
-        'frozen' => 'warning',
-        'blocked' => 'danger',
-        'terminated' => 'dark',
-    ];
-    $color = $map[$status] ?? 'secondary';
-    return '<span class="badge badge-' . $color . '">' . e(t($status)) . '</span>';
-}
-
-/** Handle an uploaded document file; returns stored filename or null. */
-function upload_file(string $field): ?string
-{
-    if (empty($_FILES[$field]['name']) || $_FILES[$field]['error'] !== UPLOAD_ERR_OK) {
-        return null;
-    }
-    $tmp = $_FILES[$field]['tmp_name'];
-    $size = (int)$_FILES[$field]['size'];
-    $max = 10 * 1024 * 1024; // 10 MB
-    if ($size > $max) {
-        flash('error', 'File is too large (max 10 MB).');
-        return null;
-    }
-    $ext = strtolower(pathinfo($_FILES[$field]['name'], PATHINFO_EXTENSION));
-    $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
-    if (!in_array($ext, $allowed, true)) {
-        flash('error', 'Unsupported file type.');
-        return null;
-    }
-    $name = date('YmdHis') . '-' . bin2hex(random_bytes(6)) . '.' . $ext;
-    if (!is_dir(UPLOAD_PATH)) {
-        mkdir(UPLOAD_PATH, 0775, true);
-    }
-    if (!move_uploaded_file($tmp, UPLOAD_PATH . '/' . $name)) {
-        flash('error', 'Failed to store the uploaded file.');
-        return null;
-    }
-    return $name;
-}
-
-/** Render a badge describing how a document was digitised. */
-function digitized_badge(string $digitized, int $verified): string
-{
-    $label = $digitized === 'robo' ? t('robo') : ($digitized === 'human' ? t('human') : t('none'));
-    $color = $verified ? 'success' : 'secondary';
-    return '<span class="badge badge-' . $color . '"><i class="fas fa-robot mr-1"></i>' . e($label) . '</span>';
+    fclose($out);
+    exit;
 }
