@@ -1,0 +1,80 @@
+CREATE TABLE IF NOT EXISTS users (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(190) NOT NULL, email VARCHAR(190) NOT NULL UNIQUE,
+ password VARCHAR(255) NOT NULL, auth_version INT NOT NULL DEFAULT 1, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS workspaces (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(190) NOT NULL, currency CHAR(3) NOT NULL DEFAULT 'EUR',
+ registration_number VARCHAR(100) NOT NULL DEFAULT '', address TEXT NULL, monthly_budget BIGINT NOT NULL DEFAULT 0,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS memberships (
+ workspace_id BIGINT UNSIGNED NOT NULL, user_id BIGINT UNSIGNED NOT NULL, role ENUM('owner','manager','member') NOT NULL,
+ PRIMARY KEY(workspace_id,user_id), FOREIGN KEY(workspace_id) REFERENCES workspaces(id), FOREIGN KEY(user_id) REFERENCES users(id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS categories (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, workspace_id BIGINT UNSIGNED NOT NULL, type ENUM('income','expense') NOT NULL,
+ name VARCHAR(100) NOT NULL, UNIQUE(workspace_id,type,name), FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS contacts (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, workspace_id BIGINT UNSIGNED NOT NULL, name VARCHAR(190) NOT NULL,
+ email VARCHAR(190) NOT NULL DEFAULT '', registration_number VARCHAR(100) NOT NULL DEFAULT '', address TEXT NULL,
+ FOREIGN KEY(workspace_id) REFERENCES workspaces(id), INDEX(workspace_id,name)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS entries (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, workspace_id BIGINT UNSIGNED NOT NULL, created_by BIGINT UNSIGNED NOT NULL,
+ type ENUM('income','expense') NOT NULL, description VARCHAR(190) NOT NULL, contact_id BIGINT UNSIGNED NULL, category_id BIGINT UNSIGNED NULL,
+ amount BIGINT NOT NULL, tax_amount BIGINT NOT NULL DEFAULT 0, entry_date DATE NOT NULL, paid_on DATE NULL,
+ status ENUM('draft','pending','approved','paid','rejected') NOT NULL DEFAULT 'draft', reference VARCHAR(100) NOT NULL DEFAULT '',
+ notes TEXT NULL, review_note VARCHAR(500) NOT NULL DEFAULT '', reviewed_by BIGINT UNSIGNED NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ FOREIGN KEY(workspace_id) REFERENCES workspaces(id), FOREIGN KEY(created_by) REFERENCES users(id),
+ FOREIGN KEY(contact_id) REFERENCES contacts(id), FOREIGN KEY(category_id) REFERENCES categories(id),
+ INDEX(workspace_id,type,entry_date), INDEX(workspace_id,status,paid_on), CHECK(amount>0), CHECK(tax_amount>=0 AND tax_amount<=amount)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS documents (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, workspace_id BIGINT UNSIGNED NOT NULL, uploaded_by BIGINT UNSIGNED NOT NULL,
+ entry_id BIGINT UNSIGNED NULL, original_name VARCHAR(190) NOT NULL, stored_name VARCHAR(100) NOT NULL UNIQUE,
+ mime VARCHAR(100) NOT NULL, size INT UNSIGNED NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(workspace_id) REFERENCES workspaces(id), FOREIGN KEY(uploaded_by) REFERENCES users(id),
+ FOREIGN KEY(entry_id) REFERENCES entries(id) ON DELETE SET NULL, INDEX(workspace_id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS invoices (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, workspace_id BIGINT UNSIGNED NOT NULL, contact_id BIGINT UNSIGNED NOT NULL,
+ number VARCHAR(80) NOT NULL, issue_date DATE NOT NULL, due_date DATE NOT NULL,
+ status ENUM('draft','sent','paid','cancelled') NOT NULL DEFAULT 'draft', subtotal BIGINT NOT NULL, tax_amount BIGINT NOT NULL,
+ total BIGINT NOT NULL, notes TEXT NULL, entry_id BIGINT UNSIGNED NULL UNIQUE,
+ seller_name VARCHAR(190) NOT NULL, seller_address TEXT NULL, seller_registration VARCHAR(100) NOT NULL,
+ customer_name VARCHAR(190) NOT NULL, customer_address TEXT NULL, customer_registration VARCHAR(100) NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE(workspace_id,number), FOREIGN KEY(workspace_id) REFERENCES workspaces(id), FOREIGN KEY(contact_id) REFERENCES contacts(id),
+ FOREIGN KEY(entry_id) REFERENCES entries(id), CHECK(total>0)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS invoice_items (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, invoice_id BIGINT UNSIGNED NOT NULL, description VARCHAR(190) NOT NULL,
+ quantity_hundredths INT NOT NULL, unit_price BIGINT NOT NULL, tax_basis_points INT NOT NULL, subtotal BIGINT NOT NULL, tax_amount BIGINT NOT NULL,
+ FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS bank_transactions (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, workspace_id BIGINT UNSIGNED NOT NULL, transaction_date DATE NOT NULL,
+ description VARCHAR(190) NOT NULL, amount BIGINT NOT NULL, fingerprint CHAR(64) NOT NULL,
+ entry_id BIGINT UNSIGNED NULL UNIQUE, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE(workspace_id,fingerprint), FOREIGN KEY(workspace_id) REFERENCES workspaces(id), FOREIGN KEY(entry_id) REFERENCES entries(id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS invitations (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, workspace_id BIGINT UNSIGNED NOT NULL, email VARCHAR(190) NOT NULL,
+ role ENUM('manager','member') NOT NULL, token_hash CHAR(64) NOT NULL UNIQUE, expires_at DATETIME NOT NULL,
+ accepted_at DATETIME NULL, FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS password_resets (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NOT NULL, token_hash CHAR(64) NOT NULL UNIQUE,
+ expires_at DATETIME NOT NULL, used_at DATETIME NULL, FOREIGN KEY(user_id) REFERENCES users(id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS login_attempts (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, identifier CHAR(64) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ INDEX(identifier,created_at)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS audit_events (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, workspace_id BIGINT UNSIGNED NOT NULL, user_id BIGINT UNSIGNED NOT NULL,
+ action VARCHAR(80) NOT NULL, description VARCHAR(500) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(workspace_id) REFERENCES workspaces(id), FOREIGN KEY(user_id) REFERENCES users(id), INDEX(workspace_id,created_at)
+) ENGINE=InnoDB;
