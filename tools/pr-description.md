@@ -8,6 +8,7 @@ Replace the previous SQLite/AdminLTE application with a framework-free PHP 8.2 a
 - Record invoice payments as income once, with integer-cent calculations and transaction/row-lock protection.
 - Include responsive English interfaces, local icons, original product artwork, schema installation and XAMPP deployment utilities.
 - Document installation, project structure, implemented workflows and external service status in README.
+- Remove external product references and the README pull request creation section.
 - Set the local demo credentials to `demo@money.local` / `123`; provide an idempotent demo seed and an explicit existing-password reset option.
 - Include self-contained Playwright development tools and a repeatable Windows PR publishing helper.
 

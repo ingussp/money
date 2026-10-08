@@ -81,7 +81,6 @@ database/schema.sql       MySQL / MariaDB schema
 storage/                  Private runtime files (not committed)
 tools/                    Install, demo seed, preview and deployment utilities
 tests/                    Browser/workflow verification
-create-pr.cmd             Publish the prepared branch and create its GitHub PR
 ```
 
 The application requires no PHP framework, Composer package or Node server. Node and Playwright are only development tools. URLs use `index.php?r=...`.
@@ -107,23 +106,9 @@ The test suite uses a separate `money_test_*` database and a temporary PHP serve
 
 The browser helper uses `MONEY_BROWSER_PATH`, a locally installed Chromium cache or Chrome/Edge. Tests are self-contained in this repository and do not depend on the earlier design gallery. XAMPP PHP is expected at `C:\xampp\php\php.exe` for the Windows development utilities.
 
-## Create The Pull Request
-
-Run **`create-pr.cmd`** from this checkout. It pushes `feature/php-money-workspace` to **https://github.com/ingussp/money** and creates a PR into `main` with the prepared title and description. If an open PR already exists for the branch, it prints that PR's URL.
-
-The script uses authenticated GitHub CLI when available. Otherwise it uses Git Credential Manager's GitHub credentials or `GH_TOKEN`/`GITHUB_TOKEN` with the GitHub API. Credentials are never written into this project. A GitHub sign-in may be needed on your machine. The script requires the prepared branch and a clean worktree, and stops if Git push fails.
-
-Check the publication setup without pushing or creating a PR:
-
-The check also validates that the GitHub request contains plain text fields. PR descriptions are read without PowerShell file metadata, so Windows PowerShell sends the body as a JSON string.
-
-```powershell
-create-pr.cmd -CheckOnly
-```
-
 ## External Services
 
-Manual entry, document storage, CSV bank imports and accounting exports work. OCR/AI extraction, incoming receipt email processing, direct bank feeds, card issuing, accounting-provider synchronization, PEPPOL, currency conversion, native mobile apps, travel/mileage bundles and paid subscriptions are not connected or implemented. The integration page shows their actual status. Feature reference: https://costpocket.com/en/features.
+Manual entry, document storage, CSV bank imports and accounting exports work. OCR/AI extraction, incoming receipt email processing, direct bank feeds, card issuing, accounting-provider synchronization, PEPPOL, currency conversion, native mobile apps, travel/mileage bundles and paid subscriptions are not connected or implemented. The integration page shows their actual status.
 
 In local mode, password-reset and invitation emails are saved to `storage/outbox/*.json`; no email is sent externally. Non-local mode uses PHP `mail()` and requires a configured mail transport. Public hosting needs its own HTTPS, database credentials, email delivery, backups and legal policies.
 
