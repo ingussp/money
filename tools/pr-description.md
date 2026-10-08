@@ -15,7 +15,7 @@ Replace the previous SQLite/AdminLTE application with a framework-free PHP 8.2 a
 
 - PHP syntax validation: 45 files passed.
 - Browser/workflow suite: 225 checks passed, covering authentication, demo login, permissions, workspace isolation, cash-flow calculations, invoice payment idempotency, uploads, CSV exchange and responsive layouts.
-- Local dry run of the PR helper, including repository, branch and clean-worktree validation.
+- Local dry run of the PR helper, including repository, branch, clean-worktree and JSON request validation. Windows PowerShell sends the PR description as a plain JSON string.
 
 ## Integration Status
 

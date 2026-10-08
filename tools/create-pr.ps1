@@ -25,11 +25,17 @@ try {
     $changes = Invoke-MoneyGit -Arguments @('status','--porcelain')
     if ($changes) { throw 'Commit or move aside your local changes before publishing the prepared PR.' }
     if (-not (Test-Path -LiteralPath $bodyPath)) { throw 'The prepared PR description is missing.' }
-    $body = Get-Content -LiteralPath $bodyPath -Raw -Encoding UTF8
+    $body = [System.IO.File]::ReadAllText($bodyPath, [System.Text.Encoding]::UTF8)
+    $request = @{ title = $title; head = $branch; base = $baseBranch; body = $body } | ConvertTo-Json
+    $payload = $request | ConvertFrom-Json
+    foreach ($field in @('title','head','base','body')) {
+        if ($payload.$field -isnot [string]) { throw "The pull request field '$field' must be plain text." }
+    }
     if ($CheckOnly) {
         Write-Output "Repository: https://github.com/$repository"
         Write-Output "Prepared branch: $branch -> $baseBranch"
         Write-Output "Title: $title"
+        Write-Output 'GitHub request validated: title, head, base and body are plain JSON strings.'
         Write-Output 'Local publication checks passed. No push or PR creation was performed.'
         exit 0
     }
@@ -76,11 +82,24 @@ try {
     $apiUrl = "https://api.github.com/repos/$repository/pulls"
     $existing = Invoke-RestMethod -Method Get -Uri "${apiUrl}?state=open&head=$head&base=$baseBranch" -Headers $headers
     if ($existing -and $existing.Count -gt 0) { Write-Output "Pull request: $($existing[0].html_url)"; exit 0 }
-    $request = @{ title = $title; head = $branch; base = $baseBranch; body = $body } | ConvertTo-Json
     $pullRequest = Invoke-RestMethod -Method Post -Uri $apiUrl -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($request))
     Write-Output "Pull request created: $($pullRequest.html_url)"
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
+    $errorDetails = $_.ErrorDetails.Message
+    if ($errorDetails) {
+        try {
+            $githubError = $errorDetails | ConvertFrom-Json
+            if ($githubError.message) { Write-Host "GitHub: $($githubError.message)" -ForegroundColor Red }
+            foreach ($detail in $githubError.errors) {
+                if ($detail -is [string]) { Write-Host $detail -ForegroundColor Red }
+                elseif ($detail.message) { Write-Host $detail.message -ForegroundColor Red }
+                else { Write-Host "$($detail.resource) / $($detail.field): $($detail.code)" -ForegroundColor Red }
+            }
+        } catch {
+            Write-Host 'The server response did not contain readable JSON error details.' -ForegroundColor Red
+        }
+    }
     exit 1
 } finally {
     $token = $null

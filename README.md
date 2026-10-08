@@ -115,6 +115,8 @@ The script uses authenticated GitHub CLI when available. Otherwise it uses Git C
 
 Check the publication setup without pushing or creating a PR:
 
+The check also validates that the GitHub request contains plain text fields. PR descriptions are read without PowerShell file metadata, so Windows PowerShell sends the body as a JSON string.
+
 ```powershell
 create-pr.cmd -CheckOnly
 ```
